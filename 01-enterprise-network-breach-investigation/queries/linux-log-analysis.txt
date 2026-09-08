@@ -1,0 +1,216 @@
+ENTERPRISE NETWORK BREACH INVESTIGATION
+Manual Linux Log Analysis Commands
+==============================================
+
+Source files used in the lab:
+  firewall.log
+  ids_alerts.log
+  vpn_auth.log
+
+Verified incident values used in this portfolio:
+  Reconnaissance source: 203.0.113.45
+  Internal scan target: 10.0.0.20
+  Targeted VPN account: svc_backup
+  Assigned VPN IP: 10.8.0.23
+  C2 beaconing host: 10.0.0.60
+  C2 destination: 198.51.100.77
+  Exfiltration-attempt host: 10.0.0.51
+
+--------------------------------------------------
+1. INITIAL LOG REVIEW
+--------------------------------------------------
+
+head firewall.log
+head ids_alerts.log
+head vpn_auth.log
+
+Purpose:
+Understand each log format before filtering or correlating events.
+
+--------------------------------------------------
+2. FIND BLOCKED FIREWALL TRAFFIC
+--------------------------------------------------
+
+cat firewall.log | grep "BLOCK" | head
+
+Purpose:
+Review blocked perimeter connections and identify possible reconnaissance.
+
+--------------------------------------------------
+3. COUNT BLOCKED REQUESTS BY SOURCE IP
+--------------------------------------------------
+
+cat firewall.log | grep "BLOCK" | cut -d' ' -f5 | cut -d: -f1 | sort -nr | uniq -c
+
+Observed in the lab investigation:
+  279 203.0.113.45
+   46 203.0.113.10
+
+The completed lab identifies 203.0.113.45 as the external IP that performed
+the most reconnaissance. It also identifies 10.0.0.20 as the internal
+host targeted by the scans.
+
+Purpose:
+Identify the source generating the highest volume of blocked requests.
+
+--------------------------------------------------
+4. CHECK WHETHER THE SUSPICIOUS SOURCE WAS ALLOWED
+--------------------------------------------------
+
+cat firewall.log | grep 203.0.113.45 | grep "ALLOW"
+
+Purpose:
+Determine whether the same suspicious source associated with reconnaissance
+also had traffic permitted by the firewall.
+
+--------------------------------------------------
+5. COUNT VPN FAILURES BY SOURCE
+--------------------------------------------------
+
+cat vpn_auth.log | grep FAIL | cut -d' ' -f3 | sort -nr | uniq -c
+
+Observed in the lab investigation:
+  118 203.0.113.45
+    1 203.0.113.100
+    1 198.51.100.92
+    1 198.51.100.45
+
+Purpose:
+Identify high-volume authentication failure sources.
+
+--------------------------------------------------
+6. PIVOT ON THE SUSPICIOUS VPN SOURCE
+--------------------------------------------------
+
+cat vpn_auth.log | grep 203.0.113.45
+
+Verified result:
+  Targeted username: svc_backup
+  Repeated FAIL events
+  Followed by SUCCESS
+  Assigned internal VPN IP: 10.8.0.23
+
+Purpose:
+Correlate the suspicious source with a failed-to-successful authentication
+sequence and identify the internal VPN context assigned after login.
+
+--------------------------------------------------
+7. REVIEW INTERNAL ACTIVITY FROM THE COMPROMISED CONTEXT
+--------------------------------------------------
+
+cat firewall.log | grep 10.8.0.23 | grep "ALLOW" | head
+
+Observed service ports:
+  22    SSH
+  445   SMB
+  3389  RDP
+
+Purpose:
+Trace the compromised internal VPN context as it communicates with internal hosts.
+
+--------------------------------------------------
+8. REVIEW IDS ALERTS FOR THE COMPROMISED CONTEXT
+--------------------------------------------------
+
+cat ids_alerts.log | grep 10.8.0.23 | head
+
+Observed alert types include:
+  ET SCAN Possible SSH Scan
+  ET EXPLOIT Possible MS-SMB Lateral Movement
+  ET EXPLOIT Possible RDP Brute Force
+
+Purpose:
+Validate suspicious internal activity using IDS telemetry.
+
+--------------------------------------------------
+9. NARROW TO SMB LATERAL-MOVEMENT ALERTS
+--------------------------------------------------
+
+cat ids_alerts.log | grep -n 10.8.0.23 | grep 'SMB' | cut -d' ' -f6,7,8,9,10,19,21 | head
+
+Verified lateral SMB port:
+  TCP/445
+
+Purpose:
+Focus specifically on repeated SMB lateral-movement alerts over TCP/445.
+
+--------------------------------------------------
+10. HUNT FOR C2 ALERTS
+--------------------------------------------------
+
+cat ids_alerts.log | grep C2 | head
+
+Verified C2 pattern:
+  Source host: 10.0.0.60
+  Destination: 198.51.100.77:4444
+  Alert type: ET TROJAN Possible C2 Beaconing
+
+Purpose:
+Identify recurring IDS alerts associated with command-and-control behavior.
+
+--------------------------------------------------
+11. REVIEW ALERT TYPES FOR THE INFECTED HOST
+--------------------------------------------------
+
+cat ids_alerts.log | grep -n 10.0.0.60 | cut -d' ' -f6,7,8,9,10,19,22,23 | head -n 15
+
+Purpose:
+Review the range of IDS activity associated with the infected host.
+
+--------------------------------------------------
+12. AGGREGATE IDS ALERT COUNTS
+--------------------------------------------------
+
+cat ids_alerts.log | grep -n 10.0.0.60 | cut -d' ' -f6,7,8,9,10,19,22,23 | uniq -c | sort -nr | head
+
+Alternate ordering used in the supplied lab material:
+
+cat ids_alerts.log | grep -n 10.0.0.60 | cut -d' ' -f6,7,8,9,10,19,22,23 | sort -nr | uniq -c | sort -nr
+
+Observed aggregate categories in the lab material include:
+  80 TROJAN Possible C2 Beaconing ... TCP ... 198.51.100.77:4444
+  32 INFO Possible HTTP POST Large ...:80
+  28 INFO Possible HTTP POST Large ...:8080
+  23 POLICY Suspicious HTTP ...
+
+Purpose:
+Quantify recurring alert types for the compromised/infected host.
+
+--------------------------------------------------
+13. REVIEW OUTBOUND CONNECTIONS FOR POSSIBLE EXFILTRATION
+--------------------------------------------------
+
+cat firewall.log | grep 10.0.0.51 | cut -d' ' -f5,6,7 | uniq | sort
+
+Verified pattern:
+  10.0.0.51 -> 198.51.100.77:80
+  10.0.0.51 -> 198.51.100.77:8080
+
+Purpose:
+Inspect repeated outbound connections from the host associated with
+exfiltration attempts to the external destination.
+
+--------------------------------------------------
+14. REVIEW THE LATEST IDS EVENTS FOR THE EXFILTRATING HOST
+--------------------------------------------------
+
+cat ids_alerts.log | grep 10.0.0.51 | tail
+
+Observed alert:
+  ET INFO Possible HTTP POST Large Upload
+  Classification: Potential Data Exfiltration
+
+Purpose:
+Correlate outbound firewall activity with IDS alerts indicating possible large
+HTTP uploads.
+
+--------------------------------------------------
+ANALYST CAUTION
+--------------------------------------------------
+
+Do not conclude that data theft was successful solely because:
+  - outbound traffic was large
+  - the IDS generated a Potential Data Exfiltration alert
+
+The supplied scenario supports DATA EXFILTRATION ATTEMPTS, but does not expose
+the transferred data contents or prove successful receipt of stolen data.
