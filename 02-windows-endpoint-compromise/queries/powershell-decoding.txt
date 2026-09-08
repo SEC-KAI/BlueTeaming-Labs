@@ -1,0 +1,45 @@
+WINDOWS ENDPOINT COMPROMISE
+PowerShell Encoded-Command Analysis
+==============================================
+
+Observed command pattern:
+  powershell.exe -WindowStyle Hidden -EncodedCommand <Base64>
+
+Safe decode method in PowerShell:
+  [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String("<Base64>"))
+
+Safe decode method in Python:
+  import base64
+  print(base64.b64decode(encoded).decode("utf-16le"))
+
+IMPORTANT:
+  Decode the string as data only. Do not execute the decoded PowerShell.
+
+Decoded behavior observed in the captured command:
+  - New-Object Net.Sockets.TCPClient(...,7532)
+  - GetStream()
+  - IO.StreamWriter
+  - IO.StreamReader
+  - ReadLine()
+  - iex $cmd
+  - Out-String
+  - WriteLine($o)
+  - retry loop using Start-Sleep -Seconds 5
+
+The captured decoded text contains this malformed address literal:
+  "=5.203.21.23"
+
+Do not silently rewrite that decoded artifact.
+
+Separate Sysmon Event ID 3 evidence confirms the actual network connection:
+  Source:      10.0.2.48:49795
+  Destination: 85.203.21.23:7532
+  Protocol:    TCP
+  ProcessID:   1405
+  Image:       powershell.exe
+  Initiated:   true
+
+Interpretation:
+  The decoded logic is capable of receiving commands over a TCP stream,
+  executing those commands with Invoke-Expression (iex), and returning
+  output through the stream.
