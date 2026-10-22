@@ -1,6 +1,5 @@
 # Zendesk Service Desk Lab
 
-**Screenshot publication status:** The supporting images are prepared but **not yet uploaded**; the screenshot links in this document will work after those files are added. The textual documentation and case study have been published.
 
 
 ## Overview

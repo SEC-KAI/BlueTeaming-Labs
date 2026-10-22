@@ -1,6 +1,5 @@
 # Screenshot Evidence Index
 
-**Publication status:** The original screenshots were reviewed and captioned for this lab, but the image files have **not yet been uploaded to GitHub**. The screenshot references below are placeholders until the images are added. The written observations are grounded in the original session screenshots.
 
 
 Screenshots were taken from my own Zendesk trial during the practice lab on **October 22, 2026**. Browser chrome was cropped to reduce unnecessary account information. They are **evidence of UI observations**, not proof of the completion of unrelated configuration, troubleshooting, or resolution activities.
