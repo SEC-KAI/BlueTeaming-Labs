@@ -1,5 +1,8 @@
 # Zendesk Service Desk Lab
 
+**Screenshot publication status:** The supporting images are prepared but **not yet uploaded**; the screenshot links in this document will work after those files are added. The textual documentation and case study have been published.
+
+
 ## Overview
 
 This project documents a hands-on **Zendesk Support / Knowledge** lab that I built to understand an internal IT service desk from both perspectives: the employee submitting a request and the technician receiving, triaging, and taking ownership of a ticket.
